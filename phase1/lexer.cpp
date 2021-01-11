@@ -24,6 +24,7 @@
  •  any other character is illegal*/
 
 # include <iostream>
+#include <fstream>
 
 using namespace std;
 
@@ -38,6 +39,7 @@ int main(){
     bool flag2 = 0;
     bool flag3 = 0;
     bool flag4 = 0;
+    bool flag5 = 0;
     int c = cin.get();
     
     while (!cin.eof()) {
@@ -52,9 +54,17 @@ int main(){
         
         //since '/' and '*' are operators and '/*' and '*/' are comment delimeters, we need an exception to make sure they are ignored
         if(c == '/' && cin.peek() == '*'){
+            c = cin.get();
+            //we don't want /*/ to be registered as a comment
+            if(cin.peek() == '/')
+                c = cin.get();
             flag4 = 1;
             while(flag4 == 1){
+                //If eof is reached we want to break out of loop
+                if(cin.eof())
+                    break;
                 c = cin.get();
+                //If we find the end comment delimeter */ then we break the loop
                 if(c == '*' && cin.peek() == '/'){
                     c = cin.get();
                     flag4 = 0;
@@ -121,16 +131,22 @@ int main(){
             c = cin.get();
             while(c != '"'){
                 //We want quotation marks to be allowed in strings so we make an exception for it
+                if(cin.eof()){
+                    flag5 = 1;
+                    break;
+                }
                 if(c == '\\'){
                    token += c;
                    c = cin.get();
                 }
                 token += c;
-                if(cin.peek() == cin.eof())
-                    cout << "Error, no close quotation mark for string" << endl;
                 c = cin.get();
             }
-            token += '"';
+            if(flag5 == 1){
+                flag5 = 0;
+                continue;
+            }
+            token += c;
             cout << "string:" << token << endl;
             token.clear();
             c = cin.get();
