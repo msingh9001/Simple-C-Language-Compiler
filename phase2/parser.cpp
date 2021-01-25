@@ -1,0 +1,417 @@
+//
+//  parser.cpp
+//  Phase 2
+//
+//  Created by Mandeep Singh on 1/5/21.
+//  All rights reserved.
+//
+//
+// Phase 2 includes disambiguating a given grammar and creating a left factored structure for it
+
+
+# include <iostream>
+# include <map>
+# include <iterator>
+# include "lexer.h"
+# include "tokens.h"
+
+using namespace std;
+
+int lookahead;
+string lexbuf;
+void expression();
+void global_declarator();
+void pointers();
+void specifier();
+void parameters();
+void parameter();
+void declarations();
+void statements();
+void statement();
+void assignment();
+void expression_list();
+void remaining_declarators();
+void remaining_parameters();
+void _function_or_global();
+
+static void error()
+{
+	if (lookahead == DONE)
+		report("syntax error at end of file");
+	else
+		report("syntax error at '%s'", lexbuf);
+
+	exit(EXIT_FAILURE);
+}
+
+static void match(int t)
+{
+	if (lookahead != t)
+		error();
+
+	lookahead = lexan(lexbuf);
+}
+
+void function_or_global(){
+    specifier();
+    pointers();
+    match(ID);
+    _function_or_global();
+}
+
+void _function_or_global(){
+    if(lookahead == OPEN_P){
+        match(OPEN_P);
+        if(lookahead == CLOSE_P){
+            match(CLOSE_P);
+            remaining_declarators();
+        }else{
+            parameters();
+            match(CLOSE_P);
+            match(OPEN_CURLY_BRACKET);
+            if(lookahead == INT || lookahead == CHAR || lookahead == VOID)
+                declarations();
+            statements();
+            match(CLOSE_CURLY_BRACKET);
+        }
+    }else if(lookahead == OPEN_BRACKET){
+        match(OPEN_BRACKET);
+        match(NUM);
+        match(CLOSE_BRACKET);
+        remaining_declarators();
+    }else{
+        remaining_declarators();
+    }
+    return;
+}
+
+void remaining_declarators(){
+    while(lookahead == COMMA){
+        match(COMMA);
+        global_declarator();
+    }
+    match(';');
+}
+
+void global_declarator(){
+    pointers();
+    match(ID);
+    if(lookahead == OPEN_P){
+        match(OPEN_P);
+        match(CLOSE_P);
+    }
+    if(lookahead == OPEN_BRACKET){
+        match(OPEN_BRACKET);
+        match(NUM);
+        match(CLOSE_BRACKET);
+    }
+    return;
+}
+
+void pointers(){
+    while(lookahead == POINTER)
+        match(POINTER);
+}
+
+void specifier(){
+    if(lookahead == INT){
+        match(INT);
+    }else if(lookahead == CHAR){
+        match(CHAR);
+    }else
+        match(VOID);
+}
+
+void parameters(){
+    if(lookahead == VOID){
+        match(VOID);
+        if(lookahead == POINTER){
+            pointers();
+            match(ID);
+            remaining_parameters();
+        }
+    }else if(lookahead == CHAR){
+        match(CHAR);
+        pointers();
+        match(ID);
+        remaining_parameters();
+    }else if(lookahead == INT){
+        match(INT);
+        pointers();
+        match(ID);
+        remaining_parameters();
+    }else
+        error();
+    return;
+}
+
+void remaining_parameters(){
+    while(lookahead == COMMA){
+        match(COMMA);
+        parameter();
+    }
+}
+
+void parameter(){
+    specifier();
+    pointers();
+    match(ID);
+}
+
+void declarations(){
+    specifier();
+    pointers();
+    match(ID);
+    if(lookahead == OPEN_BRACKET){
+        match(OPEN_BRACKET);
+        match(NUM);
+        match(CLOSE_BRACKET);
+    }
+    while(lookahead == COMMA){
+        match(COMMA);
+        pointers();
+        match(ID);
+        if(lookahead == OPEN_BRACKET){
+            match(OPEN_BRACKET);
+            match(NUM);
+            match(CLOSE_BRACKET);
+        }
+    }
+    match(SEMI_COLON);
+    if(lookahead == INT || lookahead == CHAR || lookahead == VOID)
+        declarations();
+}
+
+void statements(){
+    if(lookahead == CLOSE_CURLY_BRACKET)
+        return;
+    statement();
+    statements();
+}
+
+void statement(){
+    if(lookahead == OPEN_CURLY_BRACKET){
+        match(OPEN_CURLY_BRACKET);
+        if(lookahead == INT || lookahead == CHAR || lookahead == VOID)
+            declarations();
+        statements();
+        match(CLOSE_CURLY_BRACKET);
+    }else if(lookahead == RETURN){
+        match(RETURN);
+        expression();
+        match(SEMI_COLON);
+    }else if(lookahead == WHILE){
+        match(WHILE);
+        match(OPEN_P);
+        expression();
+        match(CLOSE_P);
+        statement();
+    }else if(lookahead == FOR){
+        match(FOR);
+        match(OPEN_P);
+        assignment();
+        match(SEMI_COLON);
+        expression();
+        match(SEMI_COLON);
+        assignment();
+        match(CLOSE_P);
+        statement();
+    }else if(lookahead == IF){
+        match(IF);
+        match(OPEN_P);
+        expression();
+        match(CLOSE_P);
+        statement();
+        if(lookahead == ELSE){
+            match(ELSE);
+            statement();
+        }
+    }else{
+        assignment();
+        match(SEMI_COLON);
+    }
+    return;
+}
+
+void assignment(){
+    expression();
+    if(lookahead == ASSIGN){
+        match(ASSIGN);
+        expression();
+    }
+    return;
+}
+
+void expression_list(){
+    expression();
+    if(lookahead == COMMA){
+        match(COMMA);
+        expression_list();
+    }
+    return;
+}
+
+void primaryExpression(){
+    if(lookahead == OPEN_P){
+        match(OPEN_P);
+        expression();
+        match(CLOSE_P);
+    }else if(lookahead == ID){
+        match(ID);
+        if(lookahead == OPEN_P){
+            match(OPEN_P);
+            if(lookahead != CLOSE_P)
+                expression_list();
+            match(CLOSE_P);
+        }
+    }else if(lookahead == NUM || lookahead == STRING){
+        match(lookahead);
+    }else{
+        error();
+    }
+    return;
+}
+
+void postfixExpression(){
+    primaryExpression();
+    while(lookahead == OPEN_BRACKET){
+        match(OPEN_BRACKET);
+        expression();
+        match(CLOSE_BRACKET);
+        cout << "index" << endl;
+    }
+    return;
+}
+
+void prefixExpression(){
+        if(lookahead == ADDR){
+            match(ADDR);
+            prefixExpression();
+            cout << "addr" << endl;
+        }else if(lookahead == POINTER){
+            match(POINTER);
+            prefixExpression();
+            cout << "deref" << endl;
+        }else if(lookahead == NOT){
+            match(NOT);
+            prefixExpression();
+            cout << "not" << endl;
+        }else if(lookahead == NEG){
+            match(NEG);
+            prefixExpression();
+            cout << "neg" << endl;
+        }else if(lookahead == SIZEOF){
+            match(SIZEOF);
+            prefixExpression();
+            cout << "sizeof" << endl;
+        }else{
+            postfixExpression();
+        }
+    return;
+}
+
+void multiplicativeExpression(){
+    prefixExpression();
+    while(lookahead == MUL || lookahead == DIV || lookahead == MOD){
+        if(lookahead == MUL){
+            match(MUL);
+            prefixExpression();
+            cout << "mul" << endl;
+        }else if(lookahead == DIV){
+            match(DIV);
+            prefixExpression();
+            cout << "div" << endl;
+        }else if(lookahead == MOD){
+            match(MOD);
+            prefixExpression();
+            cout << "rem" << endl;
+        }
+    }
+    return;
+}
+
+void additiveExpression(){
+    multiplicativeExpression();
+    while(lookahead == ADD || lookahead == SUB){
+        if(lookahead == ADD){
+            match(ADD);
+            multiplicativeExpression();
+            cout << "add" << endl;
+        }else if(lookahead == SUB){
+            match(SUB);
+            multiplicativeExpression();
+            cout << "sub" << endl;
+        }
+    }
+    return;
+}
+
+void relationalExpression(){
+    additiveExpression();
+    if(lookahead == LESS_THAN || lookahead == GREATER_THAN || lookahead == LESS_THAN_OR_EQUAL_TO || lookahead == GREATER_THAN_OR_EQUAL_TO){
+        if(lookahead == LESS_THAN){
+            match(LESS_THAN);
+            additiveExpression();
+            cout << "ltn" << endl;
+        }else if(lookahead == GREATER_THAN){
+            match(GREATER_THAN);
+            additiveExpression();
+            cout << "gtn" << endl;
+        }else if(lookahead == LESS_THAN_OR_EQUAL_TO){
+            match(LESS_THAN_OR_EQUAL_TO);
+            additiveExpression();
+            cout << "leq" << endl;
+        }else if(lookahead == GREATER_THAN_OR_EQUAL_TO){
+            match(GREATER_THAN_OR_EQUAL_TO);
+            additiveExpression();
+            cout << "geq" << endl;
+        }
+    }
+    return;
+}
+
+void equalityExpression(){
+    relationalExpression();
+    while(lookahead == EQUAL || lookahead == NOT_EQUAL){
+        if(lookahead == EQUAL){
+            match(EQUAL);
+            relationalExpression();
+            cout << "eql" << endl;
+        }else if(lookahead == NOT_EQUAL){
+            match(NOT_EQUAL);
+            relationalExpression();
+            cout << "neq" << endl;
+        }
+    }
+    return;
+}
+
+void logicalAndExpression(){
+    equalityExpression();
+    while(lookahead == AND){
+        match(AND);
+        equalityExpression();
+        cout << "and" << endl;
+    }
+    return;
+}
+
+void expression(){
+    logicalAndExpression();
+    while(lookahead == OR){
+        match(lookahead);
+        logicalAndExpression();
+        cout << "or" << endl;
+    }
+	return;
+}
+
+int main(){
+    lookahead = lexan(lexbuf);
+
+    while (lookahead != DONE){
+		function_or_global();
+    }
+
+	exit(EXIT_SUCCESS);
+}
